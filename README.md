@@ -17,7 +17,6 @@ OAuth允许用户提供一个令牌，而不是用户名和密码来访问他们
 * Resource server(资源服务器):服务提供商存放用户资源的服务器。它与认证服务器，可以是同一台服务器，也可以是不同的服务器。
 
 下图是OAuth2 的授权流程图：
-![image](file:///Users/eason_vicky/Downloads/oauth%20process.png)
 
      +--------+                               +---------------+
      |        |--(A)- Authorization Request ->|   Resource    |
