@@ -132,7 +132,7 @@ public TokenStore tokenStore() {
 @Bean
 public ResourceServerTokenServices defaultTokenServices() {
     final DefaultTokenServices defaultTokenServices = new DefaultTokenServices();
-    defaultTokenServices.setTokenEnhancer(accessTokenConverter());
+    defaultTokenServices.setTokenEnhancer(accessTokenConverter());//可选项属性，用于添加额外属性到token中
     defaultTokenServices.setTokenStore(tokenStore());
     return defaultTokenServices;
 }
@@ -155,39 +155,11 @@ public JwtAccessTokenConverter accessTokenConverter() {
     return accessTokenConverter;
 }
 ```
-添加注解@EnableResourceServer， 继承ResourceServerConfigurerAdapter，重写 `configure(ResourceServerSecurityConfigurer resources)`，
-每一个资源服务器需要定义一个Resource Id, 这个Id需和之后的认证服务器中配置的ID相对应。另外需配置一个`ResourceServerTokenServices`,用来实现令牌服务, 该接口提供了`loadAuthentication` 和 `readAccessToken` 方法。
+添加注解`@EnableResourceServer`， 继承`ResourceServerConfigurerAdapter`，重写 `configure(ResourceServerSecurityConfigurer resources)`，其实他是启用了spring security的filter，通过OAuth2的token来认证请求。当然你还需要配置`HttpSecurity`以此来告诉spring security哪些资源需要被保护，可以选择重写`ResourceServerConfigurerAdapter`下的方法，但一般我们会选择重写`WebSecurityConfigurerAdapter`的，因为该类下的order优先级更高。
 
+回到上述代码中，每一个资源服务器需要定义一个Resource Id, 这个Id需和之后的认证服务器中配置的ID相对应。另外需配置一个`ResourceServerTokenServices`,用来实现令牌服务, 该接口提供了`loadAuthentication` 和 `readAccessToken` 方法。我们这里采用了`DefaultTokenServices`这个子类，该类需要设置一个`TokenStore`, 从类名上可以看出这个是一个Token持久化的类，你可以把它理解成一个Repository，该接口有很多现有的实现类，如`InMemoryTokenStore`, `JdbcTokenStore`, `RedisTokenStore`等。本列中我们采用[JWT](https://tools.ietf.org/html/rfc7519)，如果对JWT还不太熟悉的，可以参考一些相关资料，这里不做展开，所以这里我们相应的选取了`JwtTokenStore`，到这资源服务器已配置完成。
 
-```java
-@Bean
-public UserDetailsService userDetailsService() {
-    return username -> {
-        if (username == null) {
-            throw new UsernameNotFoundException("Username could not be null");
-        }
-        User user = userRepository.findByUsernameIgnoreCase(username);
-        if (user == null) {
-            throw new UsernameNotFoundException("User [" + username + "] not exists");
-        }
-        // create the spring security user
-        Set<GrantedAuthority> set = new HashSet<>();
-        user.getGroup().getRoles().forEach(role -> set.add(new SimpleGrantedAuthority("ROLE_" + role.getName())));
-        return new org.springframework.security.core.userdetails.User(user.getUsername(), user.getPassword(), set);
-    };
-}
-```
-```java
-public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
-        http.requestMatchers().anyRequest()
-                .and()
-                .authorizeRequests()
-                .antMatchers("/oauth/*").permitAll();
-    }
-}
-```
+下面我们来看一下认证服务器
 
 
 ```java
@@ -225,7 +197,7 @@ public class AuthorizationServerConfiguration extends AuthorizationServerConfigu
                 .authorizedGrantTypes("refresh_token", "password")
                 .resourceIds(resourceId)
                 .authorities("client")
-                .scopes("client")
+                .scopes("select")
                 .accessTokenValiditySeconds(accessTokenValiditySeconds)
                 .refreshTokenValiditySeconds(refreshTokenValiditySeconds)
                 .secret(clientSecret);
@@ -233,8 +205,42 @@ public class AuthorizationServerConfiguration extends AuthorizationServerConfigu
 
     @Override
     public void configure(AuthorizationServerSecurityConfigurer oauthServer) throws Exception {
-        oauthServer.allowFormAuthenticationForClients();
+        oauthServer.allowFormAuthenticationForClients();//允许表单认证
         oauthServer.passwordEncoder(passwordEncoder);
+    }
+}
+```
+首先和资源服务器一样，添加`@EnableAuthorizationServer`, 继承`AuthorizationServerConfigurerAdapter`,重写了三个方法。
+第一个中关于`AuthenticationManager`，这个由springboot自动配置。`AccessTokenConverter`和`TokenStore`用了和资源服务器配置同样的Bean，`UserDetailsService`我们后来再来讲。
+第二个方法主要配置了一个客户端用于password认证
+
+
+```java
+@Bean
+public UserDetailsService userDetailsService() {
+    return username -> {
+        if (username == null) {
+            throw new UsernameNotFoundException("Username could not be null");
+        }
+        User user = userRepository.findByUsernameIgnoreCase(username);
+        if (user == null) {
+            throw new UsernameNotFoundException("User [" + username + "] not exists");
+        }
+        // create the spring security user
+        Set<GrantedAuthority> set = new HashSet<>();
+        user.getGroup().getRoles().forEach(role -> set.add(new SimpleGrantedAuthority("ROLE_" + role.getName())));
+        return new org.springframework.security.core.userdetails.User(user.getUsername(), user.getPassword(), set);
+    };
+}
+```
+```java
+public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http.requestMatchers().anyRequest()
+                .and()
+                .authorizeRequests()
+                .antMatchers("/oauth/*").permitAll();
     }
 }
 ```
@@ -250,4 +256,3 @@ Spring security实现OAuth2/Token设计 (本blog基于有一定spring security�
 2. 使用Spring security实现OAuth2 
 	主要以代码形式介绍Spring Security如何实现OAuth2 Token
 3. Spring security与spring security oauth源码分析(待定，因第二部分篇幅长度稍长，源码分析部分篇幅可能会更长)
-
