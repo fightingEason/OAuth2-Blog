@@ -245,4 +245,13 @@ public class SecurityConfiguration extends WebSecurityConfigurerAdapter {
 `
 /oauth/token?username={username}&password={password}&grant_type=password&scope=select&client_id={clientId}&client_secret={secret}
 `\
-之后将获取到的access token放到受保护资源的请求中即可。
+之后将获取到的access token放到受保护资源的请求中即可，支持多种方式携带。
+可以放Header： 
+`
+Authentication：Bearer access_token
+` \
+也可以放request param:
+`?access_token={access_token}`\
+
+结语：本文通过关注微信公众号的场景来了解什么OAuth授权，并介绍了四种OAuth2的授权模式。最后通过Spring security + Spring security oauth的代码配置实现了一个简单的密码模式。下篇分享我们可以分析一下spring security oauth2的源码，看看它是如何进行身份验证并颁发令牌，访问保护资源时是如何校验令牌的。
+
